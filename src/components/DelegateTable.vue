@@ -4,17 +4,22 @@
     :columns="columns"
     :data-source="delegates"
     row-key="name"
-    :scroll="{ y: 740 }"
+    :scroll="{ y: isMobile() ? 480 : 740 }"
   >
+    <!-- Ant Table's cell slots, for custom design -->
     <div slot="name" slot-scope="text, record">
-      <a
-        class="font-bold"
-        target="_blank"
-        :href="'https://arkdelegates.live/delegate/' + record.slug"
-      >
-        {{ text }}
-      </a>
-      <div>
+      <Tooltip title="Click to learn more">
+        <span class="text-red-600 font-bold"> {{ record.rank }}. </span>
+        <a
+          class="font-bold text-blue-600"
+          target="_blank"
+          :href="'https://arkdelegates.live/delegate/' + record.slug"
+        >
+          {{ text }}
+        </a>
+      </Tooltip>
+
+      <div class="hidden md:block">
         <Tooltip
           :title="
             'This is a ' +
@@ -40,44 +45,58 @@
       {{ text.toFixed(2) }} <span class="text-red-600">Ѧ</span></span
     >
     <span slot="share" slot-scope="text" class="font-bold"> {{ text }}% </span>
-    <span slot="payout" slot-scope="text" class="font-bold"> {{ text }}h </span>
+    <div
+      slot="minPayout"
+      slot-scope="text, record"
+      class="font-bold flex flex-col"
+    >
+      {{ text }}h
+      <span class="font-bold">
+        {{ calculateMinPayout(record.payout_minimum)
+        }}<span class="text-red-600"> Ѧ</span>
+      </span>
+    </div>
   </Table>
 </template>
 
 <script>
-import { Table } from "ant-design-vue";
-import { Tooltip } from "ant-design-vue";
+import { Table, Tooltip } from "ant-design-vue";
 
 const columns = [
   {
     key: "name",
     dataIndex: "name",
     title: "Name",
+    sorter: (a, b) => a.rank - b.rank,
     scopedSlots: { customRender: "name" },
   },
   {
     title: "Daily Reward",
     dataIndex: "daily",
     key: "daily",
+    sorter: (a, b) => a.daily - b.daily,
     scopedSlots: { customRender: "daily" },
   },
   {
     key: "weekly",
     title: "Weekly Reward",
     dataIndex: "weekly",
+    sorter: (a, b) => a.weekly > b.weekly,
     scopedSlots: { customRender: "weekly" },
   },
   {
     key: "payout_percent",
     title: "Shares",
     dataIndex: "payout_percent",
+    sorter: (a, b) => a.payout_percent - b.payout_percent,
     scopedSlots: { customRender: "share" },
   },
   {
     key: "payout_interval",
     title: "Payout Interval",
     dataIndex: "payout_interval",
-    scopedSlots: { customRender: "payout" },
+    sorter: (a, b) => a.payout_interval - b.payout_interval,
+    scopedSlots: { customRender: "minPayout" },
   },
 ];
 
@@ -100,6 +119,8 @@ export default {
     return {
       columns,
       delegates: null,
+      everydayArk: 422,
+      arktoshiRate: 100000000,
     };
   },
 
@@ -124,9 +145,6 @@ export default {
 
   methods: {
     calculate(balance, isVoted) {
-      const everydayArk = 422;
-      const arktoshiRate = 100000000;
-
       this.delegates.map((delegate) => {
         if (
           delegate.payout_percent == 0 ||
@@ -137,15 +155,34 @@ export default {
           delegate.daily = 0;
           delegate.weekly = 0;
         } else {
-          const shares = (everydayArk * delegate.payout_percent) / 100;
+          const shares = (this.everydayArk * delegate.payout_percent) / 100;
           const votingRate =
-            parseInt(delegate.delegateStatistics.voting_power) / arktoshiRate;
+            parseInt(delegate.delegateStatistics.voting_power) /
+            this.arktoshiRate;
 
           delegate.daily =
             shares / ((votingRate + (isVoted ? 0 : balance)) / balance);
           delegate.weekly = delegate.daily * 7;
         }
       });
+    },
+    calculateMinPayout(minPayout) {
+      if (minPayout == null || minPayout == 0) {
+        return 0;
+      } else {
+        return (parseInt(minPayout) / this.arktoshiRate).toFixed(2);
+      }
+    },
+    isMobile() {
+      if (
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        )
+      ) {
+        return true;
+      } else {
+        return false;
+      }
     },
   },
 };
